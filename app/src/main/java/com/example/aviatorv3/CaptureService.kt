@@ -44,7 +44,6 @@ class CaptureService : Service() {
                 as android.media.projection.MediaProjectionManager
 
         projection = manager.getMediaProjection(resultCode, data)
-        createOverlay()
         startCapture()
 
         return START_STICKY
