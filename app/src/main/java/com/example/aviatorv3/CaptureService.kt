@@ -46,22 +46,29 @@ class CaptureService : Service() {
             intent.getParcelableExtra<Intent>("data")
                 ?: return START_NOT_STICKY
 
-        createNotification()
+        try {
+            createNotification()
 
-        val manager =
-            getSystemService(
-                Context.MEDIA_PROJECTION_SERVICE
-            ) as android.media.projection.MediaProjectionManager
+            val manager =
+                getSystemService(
+                    Context.MEDIA_PROJECTION_SERVICE
+                ) as android.media.projection.MediaProjectionManager
 
-        projection =
-            manager.getMediaProjection(
-                resultCode,
-                data
-            )
+            projection =
+                manager.getMediaProjection(
+                    resultCode,
+                    data
+                )
 
-        startCapture()
+            startCapture()
 
-        return START_STICKY
+            return START_STICKY
+
+        } catch (e: Exception) {
+            showCrashError(e)
+            stopSelf()
+            return START_NOT_STICKY
+        }
     }
 
     private fun createNotification() {
@@ -84,6 +91,25 @@ class CaptureService : Service() {
                 .build()
 
         startForeground(1001, notification)
+    }
+
+    private fun showCrashError(e: Exception) {
+        val message = e.stackTraceToString().take(3500)
+
+        val notification =
+            Notification.Builder(this, "ocr")
+                .setContentTitle("OCR diagnostic error")
+                .setContentText(e.javaClass.simpleName)
+                .setStyle(
+                    Notification.BigTextStyle()
+                        .bigText(message)
+                )
+                .setSmallIcon(android.R.drawable.ic_dialog_alert)
+                .setAutoCancel(true)
+                .build()
+
+        getSystemService(NotificationManager::class.java)
+            .notify(9999, notification)
     }
 
     private fun startCapture() {
