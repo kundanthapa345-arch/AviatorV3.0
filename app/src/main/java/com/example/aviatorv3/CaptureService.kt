@@ -24,6 +24,7 @@ class CaptureService : Service() {
 
     private var overlay: TextView? = null
     private var windowManager: WindowManager? = null
+    private var lastNotification: Long = 0L
     private var lastNotification = 0L
     private var lastNotification = 0L
     private val history = ArrayDeque<Double>()
@@ -176,31 +177,18 @@ class CaptureService : Service() {
     }
 
 
+
     private fun showOcrNotification(value: Double) {
         val now = System.currentTimeMillis()
-        if (now - lastNotification < 1000) return
+        if (now - lastNotification < 1000L) return
+
         lastNotification = now
 
         val notification = Notification.Builder(this, "v3")
             .setContentTitle("Aviator V3 • OCR")
-            .setContentText("Detected: %.2fx • Round: %d".format(value, round))
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setAutoCancel(true)
-            .build()
-
-        getSystemService(NotificationManager::class.java)
-            .notify(2000, notification)
-    }
-
-
-    private fun showOcrNotification(value: Double) {
-        val now = System.currentTimeMillis()
-        if (now - lastNotification < 1000) return
-        lastNotification = now
-
-        val notification = Notification.Builder(this, "v3")
-            .setContentTitle("Aviator V3 • OCR")
-            .setContentText("Detected: %.2fx • Round: %d".format(value, round))
+            .setContentText(
+                "Detected: %.2fx • Round: %d".format(value, round)
+            )
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setAutoCancel(true)
             .build()
