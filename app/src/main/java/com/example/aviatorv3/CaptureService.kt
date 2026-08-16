@@ -25,8 +25,6 @@ class CaptureService : Service() {
     private var overlay: TextView? = null
     private var windowManager: WindowManager? = null
     private var lastNotification: Long = 0L
-    private var lastNotification = 0L
-    private var lastNotification = 0L
     private val history = ArrayDeque<Double>()
     private var lastValue: Double? = null
     private var round = 0
