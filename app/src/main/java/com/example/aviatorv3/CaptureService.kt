@@ -1,38 +1,47 @@
 package com.example.aviatorv3
 
-import android.app.*
-import android.content.*
-import android.graphics.*
+import android.app.Activity
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.Context
+import android.content.Intent
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.media.ImageReader
 import android.media.projection.MediaProjection
-import android.os.*
-import android.view.*
-import android.widget.TextView
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import kotlin.math.max
-import kotlin.math.min
 
 class CaptureService : Service() {
+
     private lateinit var projection: MediaProjection
-    private lateinit var reader: ImageReader
+    private lateinit var imageReader: ImageReader
+
     private val handler = Handler(Looper.getMainLooper())
+
     private val recognizer =
-        TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        TextRecognition.getClient(
+            TextRecognizerOptions.DEFAULT_OPTIONS
+        )
 
-    private var overlay: TextView? = null
-    private var windowManager: WindowManager? = null
-    private var lastNotification: Long = 0L
-    private val history = ArrayDeque<Double>()
-    private var lastValue: Double? = null
-    private var round = 0
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int
+    ): Int {
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val resultCode =
-            intent?.getIntExtra("resultCode", Activity.RESULT_CANCELED)
-                ?: return START_NOT_STICKY
+            intent?.getIntExtra(
+                "resultCode",
+                Activity.RESULT_CANCELED
+            ) ?: return START_NOT_STICKY
+
         val data =
             intent.getParcelableExtra<Intent>("data")
                 ?: return START_NOT_STICKY
@@ -40,200 +49,175 @@ class CaptureService : Service() {
         createNotification()
 
         val manager =
-            getSystemService(MEDIA_PROJECTION_SERVICE)
-                as android.media.projection.MediaProjectionManager
+            getSystemService(
+                Context.MEDIA_PROJECTION_SERVICE
+            ) as android.media.projection.MediaProjectionManager
 
-        projection = manager.getMediaProjection(resultCode, data)
+        projection =
+            manager.getMediaProjection(
+                resultCode,
+                data
+            )
+
         startCapture()
 
         return START_STICKY
     }
 
     private fun createNotification() {
+
         val channel = NotificationChannel(
-            "v3",
-            "Aviator V3",
+            "ocr",
+            "OCR Screen Reader",
             NotificationManager.IMPORTANCE_LOW
         )
 
-        getSystemService(NotificationManager::class.java)
-            .createNotificationChannel(channel)
+        getSystemService(
+            NotificationManager::class.java
+        ).createNotificationChannel(channel)
 
-        val notification = Notification.Builder(this, "v3")
-            .setContentTitle("Aviator V3")
-            .setContentText("OCR is running")
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .build()
+        val notification =
+            Notification.Builder(this, "ocr")
+                .setContentTitle("Aviator V3 OCR Tester")
+                .setContentText("Screen reading is running")
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .build()
 
         startForeground(1001, notification)
     }
 
     private fun startCapture() {
-        val dm = resources.displayMetrics
-        val width = dm.widthPixels
-        val height = dm.heightPixels
 
-        reader = ImageReader.newInstance(
-            width,
-            height,
-            PixelFormat.RGBA_8888,
-            2
-        )
+        val metrics = resources.displayMetrics
 
-        reader.setOnImageAvailableListener({ source ->
-            val image =
-                source.acquireLatestImage()
-                    ?: return@setOnImageAvailableListener
+        val width = metrics.widthPixels
+        val height = metrics.heightPixels
+        val density = metrics.densityDpi
 
-            try {
-                val bitmap =
-                    Bitmap.createBitmap(
-                        width,
-                        height,
-                        Bitmap.Config.ARGB_8888
+        imageReader =
+            ImageReader.newInstance(
+                width,
+                height,
+                PixelFormat.RGBA_8888,
+                2
+            )
+
+        imageReader.setOnImageAvailableListener(
+            { reader ->
+
+                val image =
+                    reader.acquireLatestImage()
+                        ?: return@setOnImageAvailableListener
+
+                try {
+
+                    val plane = image.planes[0]
+
+                    val bitmap =
+                        android.graphics.Bitmap.createBitmap(
+                            width,
+                            height,
+                            android.graphics.Bitmap.Config.ARGB_8888
+                        )
+
+                    bitmap.copyPixelsFromBuffer(
+                        plane.buffer
                     )
 
-                bitmap.copyPixelsFromBuffer(
-                    image.planes[0].buffer
-                )
+                    readText(bitmap)
 
-                recognize(bitmap)
-            } finally {
-                image.close()
-            }
-        }, handler)
+                    bitmap.recycle()
+
+                } finally {
+                    image.close()
+                }
+
+            },
+            handler
+        )
 
         projection.createVirtualDisplay(
-            "AviatorV3",
+            "OCR-Screen-Reader",
             width,
             height,
-            dm.densityDpi,
+            density,
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface,
+            imageReader.surface,
             null,
             handler
         )
     }
 
-    private fun recognize(bitmap: Bitmap) {
-        recognizer.process(InputImage.fromBitmap(bitmap, 0))
+    private fun readText(
+        bitmap: android.graphics.Bitmap
+    ) {
+
+        val input =
+            InputImage.fromBitmap(bitmap, 0)
+
+        recognizer
+            .process(input)
             .addOnSuccessListener { result ->
 
-                val regex =
-                    Regex("""(?<![\d.])(\d+(?:\.\d+)?)\s*x""")
+                val text =
+                    result.text.trim()
 
-                val value =
-                    regex.findAll(result.text)
-                        .mapNotNull {
-                            it.groupValues[1].toDoubleOrNull()
-                        }
-                        .filter {
-                            it > 0 && it < 1_000_000
-                        }
-                        .lastOrNull()
-
-                if (value != null && value != lastValue) {
-                    lastValue = value
-                    round++
-
-                    history.addLast(value)
-
-                    while (history.size > 500) {
-                        history.removeFirst()
-                    }
-
-                    updatePrediction()
-                    showOcrNotification(value)
+                if (text.isNotEmpty()) {
+                    showResult(text)
                 }
             }
     }
 
-    private fun updatePrediction() {
-        if (history.isEmpty()) return
+    private fun showResult(text: String) {
 
-        val recent =
-            history.takeLast(min(20, history.size))
+        val shortText =
+            if (text.length > 120) {
+                text.take(120) + "..."
+            } else {
+                text
+            }
 
-        val sorted = recent.sorted()
-        val median = sorted[sorted.size / 2]
-        val average = recent.average()
-
-        val estimate =
-            max(
-                1.01,
-                min(
-                    20.0,
-                    median * 0.65 + average * 0.35
+        val notification =
+            Notification.Builder(
+                this,
+                "ocr"
+            )
+                .setContentTitle("OCR detected text")
+                .setContentText(shortText)
+                .setStyle(
+                    Notification.BigTextStyle()
+                        .bigText(text)
                 )
-            )
+                .setSmallIcon(
+                    android.R.drawable.ic_menu_view
+                )
+                .setAutoCancel(true)
+                .build()
 
-        overlay?.text =
-            "V3 • Round #$round\n" +
-            "Estimated: %.2fx\n".format(estimate) +
-            "Rounds: ${history.size}"
-    }
-
-
-
-    private fun showOcrNotification(value: Double) {
-        val now = System.currentTimeMillis()
-        if (now - lastNotification < 1000L) return
-
-        lastNotification = now
-
-        val notification = Notification.Builder(this, "v3")
-            .setContentTitle("Aviator V3 • OCR")
-            .setContentText(
-                "Detected: %.2fx • Round: %d".format(value, round)
-            )
-            .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setAutoCancel(true)
-            .build()
-
-        getSystemService(NotificationManager::class.java)
-            .notify(2000, notification)
-    }
-
-    private fun createOverlay() {
-        windowManager =
-            getSystemService(WINDOW_SERVICE)
-                as WindowManager
-
-        overlay = TextView(this).apply {
-            text = "V3\nWaiting..."
-            textSize = 15f
-            setTextColor(Color.WHITE)
-            setPadding(18, 14, 18, 14)
-            setBackgroundColor(
-                Color.argb(235, 15, 23, 42)
-            )
-        }
-
-        val params =
-            WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT
-            )
-
-        params.gravity = Gravity.TOP or Gravity.END
-        params.x = 12
-        params.y = 120
-
-        windowManager?.addView(overlay, params)
+        getSystemService(
+            NotificationManager::class.java
+        ).notify(
+            2000,
+            notification
+        )
     }
 
     override fun onDestroy() {
-        reader.close()
-        projection.stop()
-        overlay?.let {
-            windowManager?.removeView(it)
+
+        if (::imageReader.isInitialized) {
+            imageReader.close()
         }
+
+        if (::projection.isInitialized) {
+            projection.stop()
+        }
+
         recognizer.close()
+
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? = null
 }
