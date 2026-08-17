@@ -9,8 +9,10 @@ import android.provider.Settings
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 
 class MainActivity : Activity() {
+
     private val requestCode = 9001
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,12 +24,13 @@ class MainActivity : Activity() {
         }
 
         layout.addView(TextView(this).apply {
-            text = "Aviator V3\nOCR Screen Analyzer"
+            text = "OCR Screen Reader"
             textSize = 22f
         })
 
         layout.addView(Button(this).apply {
             text = "Allow Floating Window"
+
             setOnClickListener {
                 startActivity(
                     Intent(
@@ -40,6 +43,7 @@ class MainActivity : Activity() {
 
         layout.addView(Button(this).apply {
             text = "Start Screen Reading"
+
             setOnClickListener {
                 val manager =
                     getSystemService(MEDIA_PROJECTION_SERVICE)
@@ -62,13 +66,40 @@ class MainActivity : Activity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data)
 
-        if (requestCode == this.requestCode && data != null) {
-            startForegroundService(
+        if (requestCode != this.requestCode) {
+            return
+        }
+
+        if (resultCode != RESULT_OK || data == null) {
+            Toast.makeText(
+                this,
+                "Screen sharing was not approved",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        try {
+            val serviceIntent =
                 Intent(this, CaptureService::class.java).apply {
                     putExtra("resultCode", resultCode)
                     putExtra("data", data)
                 }
-            )
+
+            startForegroundService(serviceIntent)
+
+            Toast.makeText(
+                this,
+                "Screen reader service starting...",
+                Toast.LENGTH_SHORT
+            ).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(
+                this,
+                "Service error: ${e.javaClass.simpleName}",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 }
