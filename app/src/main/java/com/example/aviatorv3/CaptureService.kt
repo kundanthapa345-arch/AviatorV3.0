@@ -113,20 +113,17 @@ class CaptureService : Service() {
     }
 
     private fun startCapture() {
-
         val metrics = resources.displayMetrics
-
         val width = metrics.widthPixels
         val height = metrics.heightPixels
         val density = metrics.densityDpi
 
-        imageReader =
-            ImageReader.newInstance(
-                width,
-                height,
-                PixelFormat.RGBA_8888,
-                2
-            )
+        imageReader = ImageReader.newInstance(
+            width,
+            height,
+            PixelFormat.RGBA_8888,
+            2
+        )
 
         projection.registerCallback(
             object : MediaProjection.Callback() {
@@ -142,36 +139,56 @@ class CaptureService : Service() {
 
         imageReader.setOnImageAvailableListener(
             { reader ->
-
-                val image =
-                    reader.acquireLatestImage()
-                        ?: return@setOnImageAvailableListener
-
-                showFrameReceived()
+                val image = reader.acquireLatestImage()
+                    ?: return@setOnImageAvailableListener
 
                 try {
+                    showFrameReceived()
 
                     val plane = image.planes[0]
+                    val buffer = plane.buffer
+                    val pixelStride = plane.pixelStride
+                    val rowStride = plane.rowStride
+                    val rowPadding =
+                        rowStride - pixelStride * width
+
+                    val bitmapWidth =
+                        width + rowPadding / pixelStride
 
                     val bitmap =
                         android.graphics.Bitmap.createBitmap(
-                            width,
+                            bitmapWidth,
                             height,
                             android.graphics.Bitmap.Config.ARGB_8888
                         )
 
-                    bitmap.copyPixelsFromBuffer(
-                        plane.buffer
-                    )
+                    bitmap.copyPixelsFromBuffer(buffer)
 
-                    readText(bitmap)
+                    val cropped =
+                        if (bitmapWidth != width) {
+                            android.graphics.Bitmap.createBitmap(
+                                bitmap,
+                                0,
+                                0,
+                                width,
+                                height
+                            )
+                        } else {
+                            bitmap
+                        }
+
+                    readText(cropped)
+
+                    if (cropped !== bitmap) {
+                        cropped.recycle()
+                    }
 
                     bitmap.recycle()
-
+                } catch (e: Exception) {
+                    showCrashError(e)
                 } finally {
                     image.close()
                 }
-
             },
             handler
         )
