@@ -1,5 +1,7 @@
 package com.example.aviatorv3
 
+import android.Manifest
+
 import android.app.Activity
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
@@ -57,6 +59,13 @@ class MainActivity : Activity() {
         })
 
         setContentView(layout)
+
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            requestPermissions(
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                7001
+            )
+        }
     }
 
     override fun onActivityResult(
