@@ -147,6 +147,8 @@ class CaptureService : Service() {
                     reader.acquireLatestImage()
                         ?: return@setOnImageAvailableListener
 
+                showFrameReceived()
+
                 try {
 
                     val plane = image.planes[0]
@@ -184,6 +186,19 @@ class CaptureService : Service() {
             null,
             handler
         )
+    }
+
+    private fun showFrameReceived() {
+        val notification =
+            Notification.Builder(this, "ocr")
+                .setContentTitle("OCR diagnostic")
+                .setContentText("Screen frame received")
+                .setSmallIcon(android.R.drawable.ic_menu_view)
+                .setAutoCancel(true)
+                .build()
+
+        getSystemService(NotificationManager::class.java)
+            .notify(3000, notification)
     }
 
     private fun readText(
