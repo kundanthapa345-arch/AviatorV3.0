@@ -218,7 +218,15 @@ class CaptureService : Service() {
             .notify(3000, notification)
     }
 
+    private var ocrBusy = false
+
     private fun readText(bitmap: android.graphics.Bitmap) {
+        if (ocrBusy) {
+            return
+        }
+
+        ocrBusy = true
+
         val safeBitmap = bitmap.copy(
             android.graphics.Bitmap.Config.ARGB_8888,
             false
@@ -232,17 +240,14 @@ class CaptureService : Service() {
 
                 if (text.isNotEmpty()) {
                     showResult(text)
-                } else {
-                    showCrashError(
-                        IllegalStateException("OCR returned empty text")
-                    )
                 }
-
-                safeBitmap.recycle()
             }
             .addOnFailureListener { e ->
-                safeBitmap.recycle()
                 showCrashError(e)
+            }
+            .addOnCompleteListener {
+                ocrBusy = false
+                safeBitmap.recycle()
             }
     }
 
