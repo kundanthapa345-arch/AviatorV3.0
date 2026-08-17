@@ -219,7 +219,12 @@ class CaptureService : Service() {
     }
 
     private fun readText(bitmap: android.graphics.Bitmap) {
-        val input = InputImage.fromBitmap(bitmap, 0)
+        val safeBitmap = bitmap.copy(
+            android.graphics.Bitmap.Config.ARGB_8888,
+            false
+        )
+
+        val input = InputImage.fromBitmap(safeBitmap, 0)
 
         recognizer.process(input)
             .addOnSuccessListener { result ->
@@ -232,8 +237,11 @@ class CaptureService : Service() {
                         IllegalStateException("OCR returned empty text")
                     )
                 }
+
+                safeBitmap.recycle()
             }
             .addOnFailureListener { e ->
+                safeBitmap.recycle()
                 showCrashError(e)
             }
     }
