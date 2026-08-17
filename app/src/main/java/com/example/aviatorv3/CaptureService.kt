@@ -128,6 +128,18 @@ class CaptureService : Service() {
                 2
             )
 
+        projection.registerCallback(
+            object : MediaProjection.Callback() {
+                override fun onStop() {
+                    if (::imageReader.isInitialized) {
+                        imageReader.close()
+                    }
+                    stopSelf()
+                }
+            },
+            handler
+        )
+
         imageReader.setOnImageAvailableListener(
             { reader ->
 
