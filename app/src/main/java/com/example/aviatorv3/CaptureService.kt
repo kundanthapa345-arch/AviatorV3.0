@@ -218,23 +218,23 @@ class CaptureService : Service() {
             .notify(3000, notification)
     }
 
-    private fun readText(
-        bitmap: android.graphics.Bitmap
-    ) {
+    private fun readText(bitmap: android.graphics.Bitmap) {
+        val input = InputImage.fromBitmap(bitmap, 0)
 
-        val input =
-            InputImage.fromBitmap(bitmap, 0)
-
-        recognizer
-            .process(input)
+        recognizer.process(input)
             .addOnSuccessListener { result ->
-
-                val text =
-                    result.text.trim()
+                val text = result.text.trim()
 
                 if (text.isNotEmpty()) {
                     showResult(text)
+                } else {
+                    showCrashError(
+                        IllegalStateException("OCR returned empty text")
+                    )
                 }
+            }
+            .addOnFailureListener { e ->
+                showCrashError(e)
             }
     }
 
