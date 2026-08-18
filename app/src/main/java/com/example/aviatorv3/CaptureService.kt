@@ -237,6 +237,12 @@ class CaptureService : Service() {
         recognizer.process(input)
             .addOnSuccessListener { result ->
                 val text = result.text.trim()
+            val multiplier = extractMultiplier(text)
+            if (multiplier != null) {
+                showResult("LAST ROUND: $multiplier")
+            } else if (text.isNotEmpty()) {
+                showResult(text)
+            }
 
                 if (text.isNotEmpty()) {
                     showResult(text)
@@ -251,7 +257,19 @@ class CaptureService : Service() {
             }
     }
 
-    private fun showResult(text: String) {
+    
+private fun extractMultiplier(text: String): String? {
+    val normalized = text
+        .replace(",", ".")
+        .replace(" ", "")
+
+    val match = Regex("""(\d+(?:\.\d+)?)x""", RegexOption.IGNORE_CASE)
+        .find(normalized)
+
+    return match?.groupValues?.get(1)?.plus("x")
+}
+
+private fun showResult(text: String) {
 
         val shortText =
             if (text.length > 120) {
