@@ -239,6 +239,7 @@ class CaptureService : Service() {
                 val text = result.text.trim()
             val multiplier = extractMultiplier(text)
             if (multiplier != null) {
+                saveRound(multiplier)
                 showResult("LAST ROUND: $multiplier")
             } else if (text.isNotEmpty()) {
                 showResult(text)
@@ -258,6 +259,45 @@ class CaptureService : Service() {
     }
 
     
+private fun saveRound(multiplier: String) {
+    val prefs = getSharedPreferences("round_history", MODE_PRIVATE)
+    val oldJson = prefs.getString("history", "[]") ?: "[]"
+
+    try {
+        val array = org.json.JSONArray(oldJson)
+
+        // Same latest multiplier ko repeatedly save na karein
+        if (array.length() > 0) {
+            val last = array.getJSONObject(array.length() - 1)
+            if (last.optString("multiplier") == multiplier) return
+        }
+
+        val item = org.json.JSONObject()
+        item.put("round", array.length() + 1)
+        item.put("multiplier", multiplier)
+        item.put("timestamp", System.currentTimeMillis())
+
+        array.put(item)
+
+        // Maximum 1000 rounds maintain karein
+        while (array.length() > 1000) {
+            array.remove(0)
+        }
+
+        // Round numbers ko 1-1000 sequence me rakhein
+        for (i in 0 until array.length()) {
+            array.getJSONObject(i).put("round", i + 1)
+        }
+
+        prefs.edit()
+            .putString("history", array.toString())
+            .apply()
+
+    } catch (e: Exception) {
+        showCrashError(e)
+    }
+}
+
 private fun extractMultiplier(text: String): String? {
     val normalized = text
         .replace(",", ".")
