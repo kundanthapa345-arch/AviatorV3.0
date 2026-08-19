@@ -303,10 +303,16 @@ private fun extractMultiplier(text: String): String? {
         .replace(",", ".")
         .replace(" ", "")
 
-    val match = Regex("""(\d+(?:\.\d+)?)x""", RegexOption.IGNORE_CASE)
-        .find(normalized)
+    val regex = Regex(
+        """(?<![0-9.])(\d{1,3}(?:\.\d{1,2})?)\s*[xX](?!\w)"""
+    )
 
-    return match?.groupValues?.get(1)?.plus("x")
+    val match = regex.find(normalized) ?: return null
+    val value = match.groupValues[1].toDoubleOrNull() ?: return null
+
+    if (value < 1.0 || value > 1000.0) return null
+
+    return "${match.groupValues[1]}x"
 }
 
 private fun showResult(text: String) {
