@@ -240,6 +240,7 @@ class CaptureService : Service() {
             val multiplier = extractMultiplier(text)
             if (multiplier != null) {
                 saveRound(multiplier)
+            updateEstimate()
                 showResult("LAST ROUND: $multiplier")
             } else if (text.isNotEmpty()) {
                 showResult(text)
@@ -293,6 +294,39 @@ private fun saveRound(multiplier: String) {
             .putString("history", array.toString())
             .apply()
 
+    } catch (e: Exception) {
+        showCrashError(e)
+    }
+}
+
+private fun updateEstimate() {
+    try {
+        val prefs = getSharedPreferences("round_history", MODE_PRIVATE)
+        val json = prefs.getString("history", "[]") ?: "[]"
+        val array = org.json.JSONArray(json)
+
+        val rounds = mutableListOf<Double>()
+
+        for (i in 0 until array.length()) {
+            val value = array.getJSONObject(i)
+                .optString("multiplier")
+                .replace("x", "", ignoreCase = true)
+                .toDoubleOrNull()
+
+            if (value != null) {
+                rounds.add(value)
+            }
+        }
+
+        val result = PredictionEngine.estimate(rounds)
+
+        if (result.estimatedX > 0.0) {
+            showResult(
+                "LAST ROUND: ${rounds.lastOrNull() ?: 0.0}x\n" +
+                "ESTIMATED X: %.2fx\n".format(result.estimatedX) +
+                "CONFIDENCE: ${result.confidence}%"
+            )
+        }
     } catch (e: Exception) {
         showCrashError(e)
     }
