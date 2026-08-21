@@ -19,6 +19,10 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 
 class CaptureService : Service() {
+    private var overlayView: android.widget.TextView? = null
+    private var overlayWindowManager: android.view.WindowManager? = null
+
+
 
     private lateinit var projection: MediaProjection
     private lateinit var imageReader: ImageReader
@@ -47,7 +51,10 @@ class CaptureService : Service() {
                 ?: return START_NOT_STICKY
 
         try {
-            createNotification()
+            if (android.provider.Settings.canDrawOverlays(this)) {
+    showOverlay()
+}
+createNotification()
 
             val manager =
                 getSystemService(
@@ -164,7 +171,8 @@ class CaptureService : Service() {
 
                     bitmap.copyPixelsFromBuffer(buffer)
 
-                    val cropped =
+                    android.util.Log.d("OCR_DEBUG", "FRAME: ${width}x${height}, density=$density")
+        val cropped =
                         if (bitmapWidth != width) {
                             android.graphics.Bitmap.createBitmap(
                                 bitmap,
@@ -321,6 +329,12 @@ private fun updateEstimate() {
         val result = PredictionEngine.estimate(rounds)
 
         if (result.estimatedX > 0.0) {
+            updateOverlay(
+                rounds.lastOrNull()?.let { "${it}x" } ?: "--",
+                result.estimatedX,
+                result.confidence
+            )
+
             showResult(
                 "LAST ROUND: ${rounds.lastOrNull() ?: 0.0}x\n" +
                 "ESTIMATED X: %.2fx\n".format(result.estimatedX) +
@@ -330,6 +344,54 @@ private fun updateEstimate() {
     } catch (e: Exception) {
         showCrashError(e)
     }
+}
+
+
+private fun showOverlay() {
+    if (overlayView != null) return
+
+    val wm = getSystemService(WINDOW_SERVICE) as android.view.WindowManager
+    overlayWindowManager = wm
+
+    val view = android.widget.TextView(this).apply {
+        text = "LAST ROUND: --\\nESTIMATED X: --\\nCONFIDENCE: --"
+        textSize = 14f
+        setPadding(18, 12, 18, 12)
+        setTextColor(android.graphics.Color.WHITE)
+        setBackgroundColor(android.graphics.Color.BLACK)
+    }
+
+    val params = android.view.WindowManager.LayoutParams(
+        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+        android.view.WindowManager.LayoutParams.WRAP_CONTENT,
+        android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        android.graphics.PixelFormat.TRANSLUCENT
+    )
+
+    params.gravity = android.view.Gravity.TOP or android.view.Gravity.END
+    params.x = 16
+    params.y = 120
+
+    wm.addView(view, params)
+    overlayView = view
+}
+
+private fun updateOverlay(lastRound: String, estimatedX: Double, confidence: Int) {
+    overlayView?.text =
+        "LAST ROUND: $lastRound\\n" +
+        "ESTIMATED X: %.2fx\\n".format(estimatedX) +
+        "CONFIDENCE: $confidence%"
+}
+
+private fun hideOverlay() {
+    try {
+        overlayView?.let { overlayWindowManager?.removeView(it) }
+    } catch (_: Exception) {
+    }
+
+    overlayView = null
+    overlayWindowManager = null
 }
 
 private fun extractMultiplier(text: String): String? {
